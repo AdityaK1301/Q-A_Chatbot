@@ -95,7 +95,7 @@ The frontend will open in your browser at [http://localhost:8501](http://localho
 
 ---
 
-## 🛠️ Technology Stack
+##  Technology Stack
 
 - **Backend Framework:** Flask
 - **Frontend Framework:** Streamlit
@@ -104,20 +104,6 @@ The frontend will open in your browser at [http://localhost:8501](http://localho
 - **PDF Processing:** PyMuPDF
 - **Voice Recognition:** SpeechRecognition
 - **Embeddings:** HuggingFace Transformers
-
----
-
-##  Project Structure
-
-```
-smart-qa-tool/
-├── app.py                 # Flask backend API
-├── streamlit_app.py       # Streamlit frontend
-├── requirements.txt       # Python dependencies
-├── datasets/              # Syllabus data (ZIP files with PDFs)
-├── README.md              # This file
-└── .gitignore             # Git ignore rules
-```
 
 ---
 
