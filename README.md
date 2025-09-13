@@ -36,7 +36,6 @@ This application uses a two-part architecture:
 **Clone the repository:**
 ```bash
 git clone <your-repo-url>
-cd smart-qa-tool
 ```
 
 **Install dependencies:**
