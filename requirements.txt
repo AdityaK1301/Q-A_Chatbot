@@ -11,3 +11,4 @@ ollama==0.1.2
 langchain-community
 langchain-huggingface
 langchain-ollama
+gtts

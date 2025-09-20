@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
 import time
+import base64
+import io
 
 st.set_page_config(
     page_title="Smart Q/A Tool",
@@ -20,6 +22,12 @@ if 'listening' not in st.session_state:
     st.session_state.listening = False
 
 API_BASE_URL = "http://localhost:5000/api"
+
+def play_audio_base64(audio_base64, format="mp3"):
+    """Play base64 encoded audio"""
+    audio_bytes = base64.b64decode(audio_base64)
+    audio_io = io.BytesIO(audio_bytes)
+    st.audio(audio_io, format=f"audio/{format}")
 
 st.title("📚 Smart Q/A Tool")
 st.markdown("Select your class and subject, then ask questions about your syllabus!")
@@ -85,11 +93,26 @@ if st.session_state.syllabus_loaded:
     st.divider()
     st.subheader(f"Ask Questions about {st.session_state.selected_class} - {st.session_state.selected_subject}")
     
-    for chat in st.session_state.chat_history:
+    for i, chat in enumerate(st.session_state.chat_history):
         with st.chat_message("user"):
             st.write(chat["question"])
+        
         with st.chat_message("assistant"):
             st.write(chat["answer"])
+            
+            if st.button("🔊 Speak Answer", key=f"speak_{i}", help="Listen to this answer"):
+                with st.spinner("Generating speech..."):
+                    try:
+                        payload = {"text": chat["answer"]}
+                        response = requests.post(f"{API_BASE_URL}/tts", json=payload)
+            
+                        if response.status_code == 200 and response.headers.get('Content-Type') == 'audio/mpeg':
+                            audio_bytes = response.content
+                            st.audio(audio_bytes, format="audio/mpeg")
+                        else:
+                            st.error("Failed to generate speech")
+                    except Exception as e:
+                        st.error(f"TTS request failed: {str(e)}")
     
     question = st.chat_input("Type your question here...")
     
@@ -102,13 +125,28 @@ if st.session_state.syllabus_loaded:
             "use_voice": False
         }
         
-        response = requests.post(f"{API_BASE_URL}/ask", json=payload)
+        response = requests.post(f"{API_BASE_URL}/ask", json=payload) 
         
         if response.status_code == 200:
-            answer = response.json()["answer"]
+            result = response.json()
+            answer = result["answer"]
             
             with st.chat_message("assistant"):
                 st.write(answer)
+                
+                if st.button("🔊 Speak Answer", key="speak_new"):
+                    with st.spinner("Generating speech..."):
+                        try:
+                            payload = {"text": answer}
+                            response = requests.post(f"{API_BASE_URL}/tts", json=payload)  
+                            
+                            if response.status_code == 200 and response.headers.get('Content-Type') == 'audio/mpeg':
+                                audio_bytes = response.content
+                                st.audio(audio_bytes, format="audio/mpeg")
+                            else:
+                                st.error("Failed to generate speech")
+                        except Exception as e:
+                            st.error(f"TTS request failed: {str(e)}")
             
             st.session_state.chat_history.append({
                 "question": question,
@@ -116,72 +154,86 @@ if st.session_state.syllabus_loaded:
             })
         else:
             st.error("Failed to get answer. Please try again.")
-    
 
-    st.markdown("---")
-    st.subheader("Voice Input")
+            
+st.markdown("---")
+st.subheader("Voice Input")
 
-    if st.button("🎤 Start Voice Input", type="secondary"):
-        st.session_state.listening = True
-        listening_placeholder = st.empty()
+if st.button("🎤 Start Voice Input", type="secondary"):
+    st.session_state.listening = True
+    listening_placeholder = st.empty()
+
+    with listening_placeholder:
+        st.info("🎤 Listening... Please speak your question now")
+
+    payload = {
+        "question": "",
+        "use_voice": True
+    }
+
+    try:
+        response = requests.post(f"{API_BASE_URL}/ask", json=payload)
     
-        with listening_placeholder:
-            st.info("🎤 Listening... Please speak your question now")
-    
-        payload = {
-            "question": "",
-            "use_voice": True
-        }
-    
-        try:
-            response = requests.post(f"{API_BASE_URL}/ask", json=payload)
+        if response.status_code == 200:
+            result = response.json()
+            voice_question = result.get("voice_input", "")
+            is_voice_error = result.get("is_voice_error", False)
         
-            if response.status_code == 200:
-                result = response.json()
-                voice_question = result.get("voice_input", "")
-                is_voice_error = result.get("is_voice_error", False)
+            listening_placeholder.empty()
+        
+            if voice_question:
+                if is_voice_error:
+                    st.warning(f"Voice recognition: {voice_question}")
+                else:
+                    st.success(f"🎤 Recognized: \"{voice_question}\"")
+        
+            if not is_voice_error and voice_question and not any(x in voice_question.lower() for x in ["error", "sorry", "detected", "couldn't understand"]):
+                with st.chat_message("user"):
+                    st.write(voice_question)
             
-                listening_placeholder.empty()
+                payload = {
+                    "question": voice_question,
+                    "use_voice": False
+                }
             
-                if voice_question:
-                    if is_voice_error:
-                        st.warning(f"Voice recognition: {voice_question}")
-                    else:
-                        st.success(f"🎤 Recognized: \"{voice_question}\"")
+                response = requests.post(f"{API_BASE_URL}/ask", json=payload)
             
-                if not is_voice_error and voice_question and not any(x in voice_question.lower() for x in ["error", "sorry", "detected", "couldn't understand"]):
-                    with st.chat_message("user"):
-                        st.write(voice_question)
+                if response.status_code == 200:
+                    result = response.json()
+                    answer = result["answer"]
                 
-                    payload = {
+                    with st.chat_message("assistant"):
+                        st.write(answer)
+                        
+                        if st.button("🔊 Speak Answer", key="tts_voice_response"):
+                            with st.spinner("Generating speech..."):
+                                try:
+                                    payload = {"text": answer}
+                                    response = requests.post(f"{API_BASE_URL}/tts", json=payload)
+            
+                                    if response.status_code == 200 and response.headers.get('Content-Type') == 'audio/mpeg':
+                                        audio_bytes = response.content
+                                        st.audio(audio_bytes, format="audio/mpeg")
+                                    else:
+                                        st.error("Failed to generate speech")
+                                except Exception as e:
+                                    st.error(f"TTS error: {str(e)}")
+                
+                    st.session_state.chat_history.append({
                         "question": voice_question,
-                        "use_voice": False
-                    }
-                
-                    response = requests.post(f"{API_BASE_URL}/ask", json=payload)
-                
-                    if response.status_code == 200:
-                        answer = response.json()["answer"]
-                    
-                        with st.chat_message("assistant"):
-                            st.write(answer)
-                    
-                        st.session_state.chat_history.append({
-                            "question": voice_question,
-                            "answer": answer
-                        })
-                    else:
-                        st.error("Failed to get answer for voice question. Please try again.")
-            else:
-                st.error("Failed to process voice input. Please try again.")
-            
-        except requests.exceptions.ConnectionError:
-            st.error("Cannot connect to the backend server. Please make sure the Flask server is running.")
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
-    
-        st.session_state.listening = False
-    
+                        "answer": answer
+                    })
+                else:
+                    st.error("Failed to get answer for voice question. Please try again.")
+        else:
+            st.error("Failed to process voice input. Please try again.")
+        
+    except requests.exceptions.ConnectionError:
+        st.error("Cannot connect to the backend server. Please make sure the Flask server is running.")
+    except Exception as e:
+        st.error(f"An error occurred: {str(e)}")
+
+    st.session_state.listening = False
     
     if st.button("Clear Chat"):
         st.session_state.chat_history = []

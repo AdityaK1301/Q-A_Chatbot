@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 import zipfile
 import os
@@ -17,6 +17,9 @@ from langchain.schema import Document
 from langchain_ollama import OllamaLLM
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.prompts import PromptTemplate
+from gtts import gTTS
+import io
+import base64
 
 app = Flask(__name__)
 CORS(app)  
@@ -334,6 +337,36 @@ def ask_question():
         "answer": answer,
         "voice_input": voice_recognition
     })
+
+@app.route('/api/tts', methods=['POST'])
+def text_to_speech():
+    data = request.get_json()
+    text = data.get('text', '')
+    
+    if not text:
+        return jsonify({"status": "error", "message": "No text provided"})
+    
+    try:
+        tts = gTTS(
+            text=text, 
+            lang='en', 
+            slow=False,  
+            lang_check=False  
+        )
+        
+        audio_buffer = io.BytesIO()
+        tts.write_to_fp(audio_buffer)
+        audio_buffer.seek(0)
+        
+        return send_file(
+            audio_buffer,
+            mimetype='audio/mpeg',
+            as_attachment=False,
+            download_name="speech.mp3"
+        )
+            
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"TTS error: {str(e)}"})
 
 if __name__ == '__main__':
     app.run(debug=True, port=5000)
