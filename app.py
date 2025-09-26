@@ -361,8 +361,7 @@ def text_to_speech():
         return send_file(
             audio_buffer,
             mimetype='audio/mpeg',
-            as_attachment=False,
-            download_name="speech.mp3"
+            as_attachment=False
         )
             
     except Exception as e:
